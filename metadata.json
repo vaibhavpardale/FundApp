@@ -1,0 +1,5 @@
+{
+  "name": "Fund APP",
+  "description": "A private, internal financial management system for managing member deposits, loans with fixed interest, and complete transaction audit trails.",
+  "requestFramePermissions": []
+}
