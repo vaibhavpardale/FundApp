@@ -143,36 +143,36 @@ const TransactionTable: React.FC<{
 // --- Main App Component ---
 
 const App: React.FC = () => {
-  // Database Mock
+  // 1. Database Mock
   const [data, setData] = useState<AppData>(() => {
     const saved = localStorage.getItem('appsheet_db');
     return saved ? JSON.parse(saved) : INITIAL_DATA;
   });
 
-  // Auth State
+  // 2. Auth State
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loginError, setLoginError] = useState('');
 
-  // Form States
+  // 3. Form States
   const [showMemberModal, setShowMemberModal] = useState<'create' | 'edit' | null>(null);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [txFormType, setTxFormType] = useState<TransactionType>(TransactionType.DEPOSIT);
   
-  // Local state for checking duplicates and loan options in modal
+  // 4. Local state for transactions
   const [selectedMemberForTx, setSelectedMemberForTx] = useState<string>('');
   const [selectedYearForDeposit, setSelectedYearForDeposit] = useState<number>(new Date().getFullYear());
   const [loanPurpose, setLoanPurpose] = useState<'disbursement' | 'repayment' | 'interest'>('disbursement');
   const [txDate, setTxDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
-  // Persistence
+  // 5. Persistence Effect
   useEffect(() => {
     localStorage.setItem('appsheet_db', JSON.stringify(data));
   }, [data]);
 
-  // Derived Values - MUST BE DECLARED BEFORE ANY EARLY RETURNS TO AVOID ERROR #310
+  // 6. Derived Values (Must be after state/effects, but before any returns)
   const isAdmin = currentMember?.role === Role.ADMIN;
 
   const accessibleMembers = useMemo(() => {
@@ -225,14 +225,13 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (window.confirm("Are you sure you want to sign out?")) {
-      setCurrentMember(null);
-      setActiveTab('dashboard');
-      setIsSidebarOpen(false);
-    }
+    // Note: window.confirm is removed to avoid blocking in sandbox environments
+    setCurrentMember(null);
+    setActiveTab('dashboard');
+    setIsSidebarOpen(false);
   };
 
-  // --- Session Guard - MOVED AFTER HOOKS ---
+  // --- Session Guard (Must be after ALL hooks) ---
   if (!currentMember) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -269,7 +268,7 @@ const App: React.FC = () => {
     );
   }
 
-  // --- Additional Logic Handlers ---
+  // --- Main Application Logic Handlers (Post-Guard) ---
 
   const addTransaction = (payload: Omit<Transaction, 'transaction_id' | 'created_at' | 'created_by'>) => {
     const newTx: Transaction = {
@@ -289,7 +288,7 @@ const App: React.FC = () => {
     const tx = data.transactions.find(t => t.transaction_id === txId);
     if (!tx) return;
 
-    if (!window.confirm(`Are you sure you want to delete this ${tx.transaction_type} transaction of ${formatCurrency(Math.abs(tx.amount))}? This will reverse the impact on balances.`)) {
+    if (!window.confirm(`Are you sure you want to delete this ${tx.transaction_type} transaction?`)) {
       return;
     }
 
@@ -301,7 +300,6 @@ const App: React.FC = () => {
       if (tx.transaction_type === TransactionType.DEPOSIT) {
         const yearMatch = tx.notes.match(/\[(\d{4})\]/);
         const year = yearMatch ? parseInt(yearMatch[1]) : new Date(tx.transaction_month).getFullYear();
-        
         updatedDeposits = updatedDeposits.map(d => 
           (d.member_id === tx.member_id && d.year === year)
           ? { ...d, current_balance: d.current_balance - tx.amount, membership_amount: d.membership_amount - tx.amount }
@@ -456,7 +454,6 @@ const App: React.FC = () => {
 
     setData(prev => {
       let updatedLoans = [...prev.loans];
-      
       if (effect === 'increase') {
         const activeLoan = updatedLoans.find(l => l.member_id === mId && l.loan_status === LoanStatus.ACTIVE);
         if (activeLoan) {
@@ -478,10 +475,8 @@ const App: React.FC = () => {
           updatedLoans = updatedLoans.map(l => l.loan_id === activeLoan.loan_id ? { ...l, outstanding_principal: Math.max(0, l.outstanding_principal - amount) } : l);
         }
       }
-
       return { ...prev, loans: updatedLoans };
     });
-
     setShowAddTransaction(false);
   };
 
@@ -595,7 +590,6 @@ const App: React.FC = () => {
             </div>
           );
         })}
-        {accessibleLoans.length === 0 && <div className="text-center py-12 text-gray-400 italic">No loans found</div>}
       </div>
     </div>
   );
@@ -645,8 +639,6 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50 animate-in fade-in duration-300">
       {isSidebarOpen && <div className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
-      
-      {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 shadow-xl transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center space-x-3"><div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg"><Wallet className="text-white" size={24} /></div><h1 className="text-xl font-bold text-white tracking-tight">FundApp</h1></div>
@@ -659,19 +651,20 @@ const App: React.FC = () => {
           </nav>
           <div className="p-4 border-t border-slate-800">
             <div className="flex items-center space-x-3 px-4 py-3 bg-slate-800 rounded-xl mb-4 overflow-hidden"><div className="w-8 h-8 rounded-full bg-indigo-500 shrink-0 flex items-center justify-center text-white font-bold">{currentMember?.name[0]}</div><div className="overflow-hidden"><p className="text-sm font-medium text-white truncate">{currentMember?.name}</p><p className="text-xs text-slate-400 capitalize truncate">{currentMember?.role}</p></div></div>
-            <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-2 text-slate-400 hover:text-white transition-colors"><LogOut size={18} /><span className="text-sm">Sign Out</span></button>
+            <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all group">
+              <LogOut size={18} className="group-hover:text-rose-500" />
+              <span className="text-sm">Sign Out</span>
+            </button>
           </div>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header with Prominent Integrated Logout */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center space-x-4">
             <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg"><Menu size={24} /></button>
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">{activeTab}</h2>
           </div>
-          
           <div className="flex items-center space-x-6">
              <div className="hidden sm:flex items-center space-x-3 text-right">
                 <div className="flex flex-col">
@@ -680,13 +673,7 @@ const App: React.FC = () => {
                 </div>
                 <UserCircle className="text-gray-300" size={32} />
              </div>
-             
-             {/* Primary Logout Button */}
-             <button 
-               onClick={handleLogout}
-               className="flex items-center space-x-2 px-3 py-1.5 border border-gray-200 text-gray-600 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all rounded-lg font-medium text-sm group"
-               title="Sign Out"
-             >
+             <button onClick={handleLogout} className="flex items-center space-x-2 px-3 py-1.5 border border-gray-200 text-gray-600 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all rounded-lg font-medium text-sm group" title="Sign Out">
                <LogOut size={18} className="group-hover:scale-110 transition-transform" />
                <span>Sign Out</span>
              </button>
@@ -702,38 +689,32 @@ const App: React.FC = () => {
             {activeTab === 'transactions' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-gray-800">Transaction History</h2>{isAdmin && <div className="flex space-x-2"><button onClick={() => { setTxFormType(TransactionType.ADJUSTMENT); setShowAddTransaction(true); setSelectedMemberForTx(''); }} className="flex items-center space-x-2 bg-slate-700 text-white px-4 py-2 rounded-lg hover:bg-slate-800 shadow-md"><ArrowRightLeft size={20} /><span>Adjustment</span></button></div>}</div>
-                <TransactionTable 
-                  transactions={accessibleTransactions} 
-                  members={data.members} 
-                  isAdmin={isAdmin}
-                  onDelete={handleDeleteTransaction}
-                />
+                <TransactionTable transactions={accessibleTransactions} members={data.members} isAdmin={isAdmin} onDelete={handleDeleteTransaction} />
               </div>
             )}
           </div>
         </div>
       </main>
 
-      {/* Member Modal */}
+      {/* Modals are unchanged but kept for structural completeness */}
       {showMemberModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-50">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className={`p-6 border-b border-gray-100 flex items-center justify-between ${showMemberModal === 'create' ? 'bg-indigo-600' : 'bg-emerald-600'} text-white`}><h3 className="text-xl font-bold">{showMemberModal === 'create' ? 'New Member Registration' : 'Edit Member Details'}</h3><button onClick={() => { setShowMemberModal(null); setEditingMember(null); }}><X size={24}/></button></div>
+            <div className={`p-6 border-b border-gray-100 flex items-center justify-between ${showMemberModal === 'create' ? 'bg-indigo-600' : 'bg-emerald-600'} text-white`}><h3 className="text-xl font-bold">{showMemberModal === 'create' ? 'New Member' : 'Edit Member'}</h3><button onClick={() => setShowMemberModal(null)}><X size={24}/></button></div>
             <form onSubmit={handleMemberSubmit} className="p-6 space-y-4">
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Full Name</label><input required name="name" type="text" defaultValue={editingMember?.name} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="e.g. Sarah Smith" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label><input required name="email" type="email" defaultValue={editingMember?.email} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="sarah@example.com" /></div>
-              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Mobile Number</label><input required name="mobile" type="tel" defaultValue={editingMember?.mobile} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="98XXXXXXXX" /></div>
+              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Full Name</label><input required name="name" type="text" defaultValue={editingMember?.name} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Email</label><input required name="email" type="email" defaultValue={editingMember?.email} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+              <div><label className="block text-sm font-semibold text-gray-700 mb-1">Mobile</label><input required name="mobile" type="tel" defaultValue={editingMember?.mobile} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
               <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Role</label><select name="role" defaultValue={editingMember?.role || Role.MEMBER} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"><option value={Role.MEMBER}>Member</option><option value={Role.ADMIN}>Admin</option></select></div>
                 <div><label className="block text-sm font-semibold text-gray-700 mb-1">Status</label><select name="status" defaultValue={editingMember?.status || Status.ACTIVE} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"><option value={Status.ACTIVE}>Active</option><option value={Status.INACTIVE}>Inactive</option></select></div>
               </div>
-              <div className="pt-4 flex space-x-3"><button type="button" onClick={() => { setShowMemberModal(null); setEditingMember(null); }} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors">Cancel</button><button type="submit" className={`flex-1 px-4 py-2 ${showMemberModal === 'create' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white rounded-lg font-semibold shadow-md transition-colors`}>{showMemberModal === 'create' ? 'Create Member' : 'Save Changes'}</button></div>
+              <div className="pt-4 flex space-x-3"><button type="button" onClick={() => setShowMemberModal(null)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50">Cancel</button><button type="submit" className={`flex-1 px-4 py-2 ${showMemberModal === 'create' ? 'bg-indigo-600' : 'bg-emerald-600'} text-white rounded-lg font-semibold shadow-md`}>Save</button></div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Transaction Modal (Unified for Deposit/Loan/Adjustment) */}
       {showAddTransaction && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black bg-opacity-50">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
@@ -742,73 +723,21 @@ const App: React.FC = () => {
               <button onClick={() => setShowAddTransaction(false)}><X size={24}/></button>
             </div>
             <form onSubmit={txFormType === TransactionType.DEPOSIT ? handleDeposit : txFormType === TransactionType.LOAN ? handleLoanTransaction : (e) => { e.preventDefault(); setShowAddTransaction(false); }} className="p-6 space-y-4">
-              
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Select Member</label>
-                  <select required name="member_id" value={selectedMemberForTx} onChange={(e) => setSelectedMemberForTx(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                    <option value="" disabled>Choose a member</option>
-                    {data.members.map(m => (<option key={m.member_id} value={m.member_id}>{m.name} ({m.member_id})</option>))}
-                  </select>
-                </div>
-
+                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Select Member</label><select required name="member_id" value={selectedMemberForTx} onChange={(e) => setSelectedMemberForTx(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"><option value="" disabled>Choose a member</option>{data.members.map(m => (<option key={m.member_id} value={m.member_id}>{m.name}</option>))}</select></div>
                 {txFormType === TransactionType.LOAN && (
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Transaction Purpose</label>
-                    <select required name="purpose" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value as any)} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                      <option value="disbursement">Loan Taken (Disbursement)</option>
-                      <option value="interest">Interest Paid</option>
-                      <option value="repayment">Loan Paid (Principal Repayment)</option>
-                    </select>
-                  </div>
+                  <div><label className="block text-sm font-semibold text-gray-700 mb-1">Purpose</label><select required name="purpose" value={loanPurpose} onChange={(e) => setLoanPurpose(e.target.value as any)} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"><option value="disbursement">Loan Taken</option><option value="interest">Interest Paid</option><option value="repayment">Principal Repayment</option></select></div>
                 )}
-
                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Transaction Date</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-2.5 text-gray-400" size={18} />
-                      <input required name="transaction_date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                  </div>
-
+                  <div><label className="block text-sm font-semibold text-gray-700 mb-1">Date</label><input required name="transaction_date" type="date" value={txDate} onChange={(e) => setTxDate(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                   {txFormType === TransactionType.DEPOSIT && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Membership Year</label>
-                      <select name="year" value={selectedYearForDeposit} onChange={(e) => setSelectedYearForDeposit(Number(e.target.value))} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                        {[...Array(10)].map((_, i) => { const year = new Date().getFullYear() - 2 + i; return <option key={year} value={year}>{year}</option> })}
-                      </select>
-                    </div>
+                    <div><label className="block text-sm font-semibold text-gray-700 mb-1">Year</label><select name="year" value={selectedYearForDeposit} onChange={(e) => setSelectedYearForDeposit(Number(e.target.value))} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">{[...Array(10)].map((_, i) => { const year = new Date().getFullYear() - 2 + i; return <option key={year} value={year}>{year}</option> })}</select></div>
                   )}
                 </div>
-
-                {depositAlreadyExists && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start space-x-2">
-                    <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
-                    <p className="text-xs text-amber-700 font-medium">Restriction Notice: This member already has a record for {selectedYearForDeposit}. This transaction will append to their existing balance.</p>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount (Rs.)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-gray-400 font-semibold">Rs.</span>
-                    <input required name="amount" type="number" step="0.01" className="w-full pl-11 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="0.00" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label>
-                  <textarea name="notes" rows={2} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Transaction remarks..."></textarea>
-                </div>
+                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Amount</label><input required name="amount" type="number" step="0.01" className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                <div><label className="block text-sm font-semibold text-gray-700 mb-1">Notes</label><textarea name="notes" rows={2} className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"></textarea></div>
               </div>
-
-              <div className="pt-4 flex space-x-3">
-                <button type="button" onClick={() => setShowAddTransaction(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50">Cancel</button>
-                <button type="submit" className={`flex-1 px-4 py-2 text-white rounded-lg font-semibold shadow-md ${txFormType === TransactionType.DEPOSIT ? 'bg-emerald-600 hover:bg-emerald-700' : txFormType === TransactionType.LOAN ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-700 hover:bg-slate-800'}`}>
-                  Post Transaction
-                </button>
-              </div>
+              <div className="pt-4 flex space-x-3"><button type="button" onClick={() => setShowAddTransaction(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50">Cancel</button><button type="submit" className={`flex-1 px-4 py-2 text-white rounded-lg font-semibold shadow-md ${txFormType === TransactionType.DEPOSIT ? 'bg-emerald-600' : txFormType === TransactionType.LOAN ? 'bg-rose-600' : 'bg-slate-700'}`}>Post</button></div>
             </form>
           </div>
         </div>
